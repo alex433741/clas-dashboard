@@ -564,6 +564,16 @@
                 kpiContainer.className = 'kpi-container';
                 
                 metricGroups[groupName].forEach(metric => {
+                    // Special handling for CLAS (All Departments): Show CHP_AcademicYear instead of Seats_Filled
+                    if (currentDept === 'CLAS' && metric === 'Seats_Filled') {
+                        // Calculate CHP for academic year (Fall + Spring)
+                        const chpCard = createAcademicYearCHPCard();
+                        if (chpCard) {
+                            kpiContainer.appendChild(chpCard);
+                        }
+                        return; // Skip the regular Seats_Filled card
+                    }
+                    
                     const current = getMostRecentValue(currentDept, metric);
                     
                     if (!current) return;
@@ -579,7 +589,9 @@
                     
                     let changeClass = 'neutral';
                     let arrow = '';
-                    if (change !== null) {
+                    let comparisonText = '';
+                    
+                    if (change !== null && pv !== null) {
                         // DFWI: lower is better (down = green, up = red)
                         // All other metrics: higher is better (up = green, down = red)
                         if (metric === 'DFWI') {
@@ -587,7 +599,26 @@
                         } else {
                             changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
                         }
-                        arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+                        
+                        // For percentage metrics, show "Up from" or "Down from" with previous value
+                        const isPercentageMetric = metric.includes('Rate') || metric === 'Retention' || 
+                                                   metric.includes('Retention_') || metric === 'DFWI' || 
+                                                   metric.includes('Grad_') || metric === 'Online_CHP';
+                        
+                        if (isPercentageMetric) {
+                            if (change > 0) {
+                                comparisonText = `Up from ${formatValue(metric, previous.Value)} in ${previous['Year/Term']}`;
+                            } else if (change < 0) {
+                                comparisonText = `Down from ${formatValue(metric, previous.Value)} in ${previous['Year/Term']}`;
+                            } else {
+                                comparisonText = `Unchanged from ${previous['Year/Term']}`;
+                            }
+                        } else {
+                            arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+                            comparisonText = `${arrow} ${Math.abs(change).toFixed(1)}% vs ${previous['Year/Term']}`;
+                        }
+                    } else {
+                        comparisonText = 'No prior year data';
                     }
                     
                     // Create title with year/term in parentheses
@@ -596,9 +627,7 @@
                     card.innerHTML = `
                         <div class="kpi-label">${metricTitle}</div>
                         <div class="kpi-value">${formatValue(metric, current.Value)}</div>
-                        ${change !== null ? 
-                            `<div class="kpi-change ${changeClass}">${arrow} ${Math.abs(change).toFixed(1)}% vs ${previous['Year/Term']}</div>` 
-                            : '<div class="kpi-change neutral">No prior year data</div>'}
+                        <div class="kpi-change ${changeClass}">${comparisonText}</div>
                     `;
                     kpiContainer.appendChild(card);
                 });
@@ -608,6 +637,91 @@
                     container.appendChild(section);
                 }
             });
+        }
+        
+        function createAcademicYearCHPCard() {
+            // Get all academic years that have CHP data across all departments
+            const academicYears = [...new Set(allData
+                .filter(d => d.Metric === 'CHP' && d['Year/Term'] && (d['Year/Term'].includes('Fall') || d['Year/Term'].includes('Spring')))
+                .map(d => {
+                    // Extract year from Fall YYYY or Spring YYYY
+                    const yearMatch = d['Year/Term'].match(/\d{4}/);
+                    if (!yearMatch) return null;
+                    const year = parseInt(yearMatch[0]);
+                    const isFall = d['Year/Term'].toLowerCase().includes('fall');
+                    // Convert to academic year format: Fall 2024 + Spring 2025 = 2024-2025
+                    return isFall ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+                })
+                .filter(y => y !== null)
+            )].sort().reverse();
+            
+            if (academicYears.length === 0) return null;
+            
+            const mostRecentAcademicYear = academicYears[0];
+            const previousAcademicYear = academicYears.length > 1 ? academicYears[1] : null;
+            
+            // Calculate sum for most recent academic year
+            const [fallYear, springYear] = mostRecentAcademicYear.split('-').map(y => parseInt(y));
+            const currentSum = calculateAcademicYearCHP(fallYear, springYear);
+            
+            let previousSum = null;
+            if (previousAcademicYear) {
+                const [prevFallYear, prevSpringYear] = previousAcademicYear.split('-').map(y => parseInt(y));
+                previousSum = calculateAcademicYearCHP(prevFallYear, prevSpringYear);
+            }
+            
+            const change = (currentSum !== null && previousSum !== null) 
+                ? ((currentSum - previousSum) / previousSum * 100) 
+                : null;
+            
+            const card = document.createElement('div');
+            card.className = 'kpi-card';
+            
+            let changeClass = 'neutral';
+            let arrow = '';
+            if (change !== null) {
+                changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+                arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+            }
+            
+            card.innerHTML = `
+                <div class="kpi-label">Credit Hours Produced (${mostRecentAcademicYear})</div>
+                <div class="kpi-value">${currentSum !== null ? Math.round(currentSum).toLocaleString() : '-'}</div>
+                ${change !== null ? 
+                    `<div class="kpi-change ${changeClass}">${arrow} ${Math.abs(change).toFixed(1)}% vs ${previousAcademicYear}</div>` 
+                    : '<div class="kpi-change neutral">No prior year data</div>'}
+            `;
+            
+            return card;
+        }
+        
+        function calculateAcademicYearCHP(fallYear, springYear) {
+            // Get all departments' CHP for Fall and Spring
+            const fallTerm = `Fall ${fallYear}`;
+            const springTerm = `Spring ${springYear}`;
+            
+            const fallData = allData.filter(d => 
+                d.Metric === 'CHP' && 
+                d['Year/Term'] === fallTerm &&
+                d.Department !== 'CLAS' && // Exclude the aggregate CLAS row to avoid double-counting
+                d.Value !== null && 
+                d.Value !== undefined && 
+                d.Value !== ''
+            );
+            
+            const springData = allData.filter(d => 
+                d.Metric === 'CHP' && 
+                d['Year/Term'] === springTerm &&
+                d.Department !== 'CLAS' && // Exclude the aggregate CLAS row to avoid double-counting
+                d.Value !== null && 
+                d.Value !== undefined && 
+                d.Value !== ''
+            );
+            
+            const fallSum = fallData.reduce((sum, d) => sum + parseFloat(d.Value), 0);
+            const springSum = springData.reduce((sum, d) => sum + parseFloat(d.Value), 0);
+            
+            return fallSum + springSum;
         }
         
         function updateTables() {
