@@ -640,25 +640,57 @@
         }
         
         function createAcademicYearCHPCard() {
-            // Get all academic years that have CHP data across all departments
-            const academicYears = [...new Set(allData
-                .filter(d => d.Metric === 'CHP' && d['Year/Term'] && (d['Year/Term'].includes('Fall') || d['Year/Term'].includes('Spring')))
+            // Get all academic years that have BOTH Fall and Spring CHP data
+            const academicYearsWithData = [];
+            
+            // Find all unique Fall years
+            const fallYears = [...new Set(allData
+                .filter(d => d.Metric === 'CHP' && d['Year/Term'] && d['Year/Term'].includes('Fall'))
                 .map(d => {
-                    // Extract year from Fall YYYY or Spring YYYY
                     const yearMatch = d['Year/Term'].match(/\d{4}/);
-                    if (!yearMatch) return null;
-                    const year = parseInt(yearMatch[0]);
-                    const isFall = d['Year/Term'].toLowerCase().includes('fall');
-                    // Convert to academic year format: Fall 2024 + Spring 2025 = 2024-2025
-                    return isFall ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+                    return yearMatch ? parseInt(yearMatch[0]) : null;
                 })
                 .filter(y => y !== null)
-            )].sort().reverse();
+            )];
             
-            if (academicYears.length === 0) return null;
+            // Check each Fall year to see if corresponding Spring year exists
+            fallYears.forEach(fallYear => {
+                const springYear = fallYear + 1;
+                const fallTerm = `Fall ${fallYear}`;
+                const springTerm = `Spring ${springYear}`;
+                
+                // Check if both Fall and Spring have data (excluding CLAS aggregate)
+                const hasFallData = allData.some(d => 
+                    d.Metric === 'CHP' && 
+                    d['Year/Term'] === fallTerm &&
+                    d.Department !== 'CLAS' &&
+                    d.Value !== null && 
+                    d.Value !== undefined && 
+                    d.Value !== ''
+                );
+                
+                const hasSpringData = allData.some(d => 
+                    d.Metric === 'CHP' && 
+                    d['Year/Term'] === springTerm &&
+                    d.Department !== 'CLAS' &&
+                    d.Value !== null && 
+                    d.Value !== undefined && 
+                    d.Value !== ''
+                );
+                
+                // Only include academic years with BOTH Fall and Spring data
+                if (hasFallData && hasSpringData) {
+                    academicYearsWithData.push(`${fallYear}-${springYear}`);
+                }
+            });
             
-            const mostRecentAcademicYear = academicYears[0];
-            const previousAcademicYear = academicYears.length > 1 ? academicYears[1] : null;
+            if (academicYearsWithData.length === 0) return null;
+            
+            // Sort in reverse chronological order
+            academicYearsWithData.sort().reverse();
+            
+            const mostRecentAcademicYear = academicYearsWithData[0];
+            const previousAcademicYear = academicYearsWithData.length > 1 ? academicYearsWithData[1] : null;
             
             // Calculate sum for most recent academic year
             const [fallYear, springYear] = mostRecentAcademicYear.split('-').map(y => parseInt(y));
@@ -679,17 +711,20 @@
             
             let changeClass = 'neutral';
             let arrow = '';
+            let comparisonText = '';
+            
             if (change !== null) {
                 changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
                 arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+                comparisonText = `${arrow} ${Math.abs(change).toFixed(1)}% vs ${previousAcademicYear}`;
+            } else {
+                comparisonText = 'No prior year data';
             }
             
             card.innerHTML = `
                 <div class="kpi-label">Credit Hours Produced (${mostRecentAcademicYear})</div>
                 <div class="kpi-value">${currentSum !== null ? Math.round(currentSum).toLocaleString() : '-'}</div>
-                ${change !== null ? 
-                    `<div class="kpi-change ${changeClass}">${arrow} ${Math.abs(change).toFixed(1)}% vs ${previousAcademicYear}</div>` 
-                    : '<div class="kpi-change neutral">No prior year data</div>'}
+                <div class="kpi-change ${changeClass}">${comparisonText}</div>
             `;
             
             return card;
