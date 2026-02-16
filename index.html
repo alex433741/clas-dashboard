@@ -194,11 +194,16 @@
         <div id="errorContainer"></div>
         
         <div class="filters">
-            <label>Department:</label>
-            <select id="deptSelect">
-                <option value="">Loading...</option>
-            </select>
-        </div>
+    <label>College:</label>
+    <select id="collegeSelect">
+        <option value="All">All Colleges</option>
+    </select>
+
+    <label>Department:</label>
+    <select id="deptSelect">
+        <option value="All">All Departments</option>
+    </select>
+</div>
         
         <div id="metricsContainer"></div>
         
@@ -242,7 +247,8 @@
     
     <script>
         let allData = [];
-        let currentDept = 'CLAS';
+        let currentCollege = 'All';
+        let currentDept = 'All';
         let trendChart = null;
         
         const metricGroups = {
@@ -322,8 +328,9 @@
         }
         
         function getLatestValue(dept, metric, yearPattern) {
-            const matches = allData.filter(d => 
-                d.Department === dept && 
+            const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
                 d.Metric === metric && 
                 d['Year/Term'] && 
                 d['Year/Term'].includes(yearPattern)
@@ -332,8 +339,9 @@
         }
         
         function getMostRecentValue(dept, metric) {
-            const matches = allData.filter(d => 
-                d.Department === dept && 
+            const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
                 d.Metric === metric && 
                 d['Year/Term'] && 
                 d.Value !== null && 
@@ -372,9 +380,10 @@
             
             // If it's an academic year format (e.g., "2024-2025"), find previous academic year
             if (currentYearTerm.includes('-')) {
-                const matches = allData.filter(d => 
-                    d.Department === dept && 
-                    d.Metric === metric && 
+                const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
+                d.Metric === metric && 
                     d['Year/Term'] && 
                     d['Year/Term'].includes('-') &&
                     d['Year/Term'] !== currentYearTerm &&
@@ -392,9 +401,10 @@
             
             // For term-based metrics (Fall/Spring), find the same term from previous year
             if (currentTerm) {
-                const matches = allData.filter(d => 
-                    d.Department === dept && 
-                    d.Metric === metric && 
+                const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
+                d.Metric === metric && 
                     d['Year/Term'] && 
                     d['Year/Term'].includes(currentTerm) &&
                     d['Year/Term'] !== currentYearTerm &&
@@ -416,8 +426,9 @@
             }
             
             // Fallback for other formats
-            const matches = allData.filter(d => 
-                d.Department === dept && 
+            const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
                 d.Metric === metric && 
                 d['Year/Term'] && 
                 d['Year/Term'] !== currentYearTerm &&
@@ -432,12 +443,12 @@
         }
         
         // Load CSV file from same folder
-        Papa.parse('AllColleges_Data.csv', {
+        Papa.parse('AllColleges_LongFormat_Output.csv', {
             download: true,
             header: true,
             complete: function(results) {
                 allData = results.data.filter(row => 
-                    row.Department && row.Metric && row['Year/Term'] && row.Value
+                    row.College && row.Department && row.Metric && row.Value
                 );
                 if (allData.length === 0) {
                     showError('CSV file loaded but no valid data found. Please check the file format.');
@@ -446,7 +457,7 @@
                 }
             },
             error: function(error) {
-                showError('Could not load CLAS_Data_Dashboard.csv. Make sure it is in the same folder as this HTML file.');
+                showError('Could not load AllColleges_LongFormat_Output.csv. Make sure it is in the same folder as this HTML file.');
                 console.error(error);
             }
         });
@@ -467,35 +478,73 @@
             });
             document.getElementById('subtitle').textContent = `Data refreshed on ${formattedDate}`;
             
-            // Put CLAS first, then sort the rest alphabetically
-            const otherDepts = [...new Set(allData.map(d => d.Department).filter(d => d !== 'CLAS'))].sort();
-            const depts = ['CLAS', ...otherDepts];
             
-            const deptSelect = document.getElementById('deptSelect');
-            deptSelect.innerHTML = '';
-            
-            depts.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d;
-                opt.textContent = d === 'CLAS' ? 'CLAS (All Departments)' : d;
-                deptSelect.appendChild(opt);
-            });
-            
-            deptSelect.value = 'CLAS';
-            deptSelect.addEventListener('change', function() {
-                currentDept = this.value;
-                updateChartMetricOptions(); // Update available metrics
-                updateDashboard();
-            });
-            
-            // Populate chart metric selector
+// Populate college dropdown (All + alphabetical)
+const colleges = ['All', ...[...new Set(allData.map(d => d.College).filter(Boolean))].sort()];
+const collegeSelect = document.getElementById('collegeSelect');
+collegeSelect.innerHTML = '';
+colleges.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = (c === 'All') ? 'All Colleges' : c;
+    collegeSelect.appendChild(opt);
+});
+
+// Default to CLAS college if present, else All
+const preferredCollege = 'College Letters Arts Sciences';
+currentCollege = colleges.includes(preferredCollege) ? preferredCollege : 'All';
+collegeSelect.value = currentCollege;
+
+const deptSelect = document.getElementById('deptSelect');
+
+function populateDeptOptions() {
+    const deptSet = new Set(allData
+        .filter(d => currentCollege === 'All' || d.College === currentCollege)
+        .map(d => d.Department)
+        .filter(Boolean)
+    );
+    const depts = ['All', ...[...deptSet].sort()];
+
+    deptSelect.innerHTML = '';
+    depts.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = (d === 'All') ? 'All Departments' : d;
+        deptSelect.appendChild(opt);
+    });
+
+    // Keep selection if still valid, else reset to All
+    if (!depts.includes(currentDept)) {
+        currentDept = 'All';
+    }
+    deptSelect.value = currentDept;
+}
+
+populateDeptOptions();
+
+collegeSelect.addEventListener('change', function() {
+    currentCollege = this.value;
+    // Reset department to All when college changes (safer UX)
+    currentDept = 'All';
+    populateDeptOptions();
+    updateChartMetricOptions();
+    updateDashboard();
+});
+
+deptSelect.addEventListener('change', function() {
+    currentDept = this.value;
+    updateChartMetricOptions(); // Update available metrics
+    updateDashboard();
+});
+
+// Populate chart metric selector
             const chartMetricSelect = document.getElementById('chartMetricSelect');
             
             // Function to populate metrics based on current department
             function updateChartMetricOptions() {
                 // Get metrics that have data for current department
                 const availableMetrics = [...new Set(allData
-                    .filter(d => d.Department === currentDept)
+                    .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
                     .map(d => d.Metric)
                 )].sort();
                 
@@ -564,17 +613,7 @@
                 kpiContainer.className = 'kpi-container';
                 
                 metricGroups[groupName].forEach(metric => {
-                    // Special handling for CLAS (All Departments): Show CHP_AcademicYear instead of Seats_Filled
-                    if (currentDept === 'CLAS' && metric === 'Seats_Filled') {
-                        // Calculate CHP for academic year (Fall + Spring)
-                        const chpCard = createAcademicYearCHPCard();
-                        if (chpCard) {
-                            kpiContainer.appendChild(chpCard);
-                        }
-                        return; // Skip the regular Seats_Filled card
-                    }
-                    
-                    const current = getMostRecentValue(currentDept, metric);
+const current = getMostRecentValue(currentDept, metric);
                     
                     if (!current) return;
                     
@@ -767,7 +806,7 @@
         function updateYearTable() {
             // Get all academic years (YYYY-YYYY format) and sort in reverse
             const years = [...new Set(allData
-                .filter(d => d.Department === currentDept)
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
                 .map(d => d['Year/Term'])
                 .filter(y => y && y.includes('-'))
             )].sort().reverse();
@@ -781,7 +820,7 @@
             });
             
             const metrics = [...new Set(allData
-                .filter(d => d.Department === currentDept)
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
                 .map(d => d.Metric)
             )].sort();
             
@@ -829,7 +868,7 @@
         function updateTermTable() {
             // Get all terms (Fall/Spring) in reverse chronological order
             const terms = [...new Set(allData
-                .filter(d => d.Department === currentDept)
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
                 .map(d => d['Year/Term'])
                 .filter(y => y && (y.includes('Fall') || y.includes('Spring')))
             )].sort((a, b) => {
@@ -862,7 +901,7 @@
             });
             
             const metrics = [...new Set(allData
-                .filter(d => d.Department === currentDept)
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
                 .map(d => d.Metric)
             )].sort();
             
