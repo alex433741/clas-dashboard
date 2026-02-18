@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CLAS Data Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: #00447c;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-logo {
+            flex-shrink: 0;
+        }
+        .header-logo img {
+            height: 80px;
+            width: auto;
+        }
+        .header-content {
+            flex: 1;
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            color: white;
+        }
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+            .header-logo img {
+                height: 60px;
+            }
+        }
+        .filters {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #00447c;
+        }
+        label {
+            font-weight: 600;
+            margin-right: 8px;
+            color: #00447c;
+        }
+        select {
+            padding: 8px 12px;
+            margin-right: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        select:focus {
+            outline: none;
+            border-color: #00447c;
+            box-shadow: 0 0 0 2px rgba(0, 68, 124, 0.1);
+        }
+        
+        /* Metric sections */
+        .metric-section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            padding-left: 5px;
+            border-left: 4px solid #00447c;
+            padding-left: 12px;
+        }
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 8px;
+        }
+        .kpi-card {
+            background: white;
+            padding: 18px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .kpi-label {
+            color: #717073;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+        .kpi-value {
+            font-size: 26px;
+            font-weight: bold;
+            color: #00447c;
+            margin-bottom: 4px;
+        }
+        .kpi-change {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .positive { color: #10b981; }
+        .negative { color: #d11242; }
+        .neutral { color: #717073; }
+        
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            border-top: 3px solid #00447c;
+        }
+        .table-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #00447c;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+        th {
+            background: #00447c;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            position: sticky;
+            top: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        tbody tr:hover {
+            background: rgba(0, 68, 124, 0.05);
+        }
+        .metric-name {
+            font-weight: 600;
+            color: #00447c;
+        }
+        .error-message {
+            background: #fff3cd;
+            border: 1px solid #d11242;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-logo">
+                <img src="clas-logo.png" alt="CLAS Logo">
+            </div>
+            <div class="header-content">
+                <h1>CLAS Data Dashboard</h1>
+                <p class="subtitle" id="subtitle">Loading data...</p>
+            </div>
+        </div>
+        
+        <div id="errorContainer"></div>
+        
+        <div class="filters">
+    <label>College:</label>
+    <select id="collegeSelect">
+        <option value="All">All Colleges</option>
+    </select>
+
+    <label>Department:</label>
+    <select id="deptSelect">
+        <option value="All">All Departments</option>
+    </select>
+</div>
+        
+        <div id="metricsContainer"></div>
+        
+        <div class="table-container" style="margin-bottom: 25px;">
+            <div class="table-title">Trend Analysis</div>
+            <div style="margin-bottom: 15px;">
+                <label>Select Metric to Chart:</label>
+                <select id="chartMetricSelect" style="min-width: 250px;">
+                    <option value="">Choose a metric...</option>
+                </select>
+            </div>
+            <canvas id="trendChart" style="max-height: 400px;"></canvas>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-title">Metrics - Year to Year</div>
+            <table id="dataTableYear">
+                <thead>
+                    <tr id="tableHeaderYear">
+                        <th>Metric</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyYear">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-title">Metrics - Term to Term</div>
+            <table id="dataTableTerm">
+                <thead>
+                    <tr id="tableHeaderTerm">
+                        <th>Metric</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyTerm">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        let allData = [];
+        let currentCollege = 'All';
+        let currentDept = 'All';
+        let trendChart = null;
+        
+        const metricGroups = {
+            'Enrollment': ['CHP', 'FTEs', 'Seats_Filled', 'Majors', 'Online_CHP'],
+            'Retention': ['Retention', 'Retention_FTFT', 'Retention_Transfer'],
+            'Graduation': ['Graduates', 'Grad_4_Year', 'Grad_6_Year'],
+            'Fiscal Health': ['Profit_Loss', 'Avg_Class_Size', 'Fill_Rate']
+        };
+        
+        const metricLabels = {
+            'CHP': 'Credit Hours Produced',
+            'FTEs': 'FTEs',
+            'Seats_Filled': 'Seats Filled',
+            'Majors': 'Total Majors',
+            'Online_CHP': 'Online CHP %',
+            'Retention': 'Overall Retention',
+            'Retention_FTFT': 'FTFT Retention',
+            'Retention_Transfer': 'Transfer Retention',
+            'Graduates': 'Graduates',
+            'Grad_4_Year': '4-Year Grad Rate',
+            'Grad_5_Year': '5-Year Grad Rate',
+            'Grad_6_Year': '6-Year Grad Rate',
+            'Profit_Loss': 'Profit/Loss',
+            'Avg_Class_Size': 'Avg Class Size',
+            'Fill_Rate': 'Fill Rate',
+            'DFWI': 'DFWI Rate'
+        };
+        
+        // ---------- Aggregation helpers (College/Department scope) ----------
+        const percentMetrics = new Set(['Retention', 'Retention_FTFT', 'Retention_Transfer', 'Grad_4_Year', 'Grad_5_Year', 'Grad_6_Year']);
+        const sumMetrics = new Set(['Credit_Hours_Produced', 'Majors', 'Graduates']);
+
+        function inScope(d) {
+            const collegeOk = (currentCollege === 'All' || d.College === currentCollege);
+            const deptOk = (currentDept === 'All' || d.Department === currentDept);
+            return collegeOk && deptOk;
+        }
+
+        function yearTermSortKey(period) {
+            if (!period) return -1;
+
+            // Term format: "Fall 2025" / "Spring 2025" / "Summer 2025"
+            const termMatch = period.match(/\b(Fall|Spring|Summer)\b\s*(\d{4})/i);
+            if (termMatch) {
+                const term = termMatch[1].toLowerCase();
+                const year = parseInt(termMatch[2], 10);
+                const termOrder = term === 'spring' ? 1 : (term === 'summer' ? 2 : 3); // Fall last
+                return year * 10 + termOrder;
+            }
+
+            // Academic year format: "2024-2025"
+            const ayMatch = period.match(/^(\d{4})\s*-\s*(\d{4})$/);
+            if (ayMatch) {
+                const endYear = parseInt(ayMatch[2], 10);
+                return endYear * 10; // keep room for termOrder
+            }
+
+            // Fallback: first 4-digit year
+            const yearMatch = period.match(/(\d{4})/);
+            return yearMatch ? parseInt(yearMatch[1], 10) * 10 : -1;
+        }
+
+        function getMostRecentPeriod(records) {
+            let best = null;
+            let bestKey = -1;
+            for (const r of records) {
+                const key = yearTermSortKey(r['Year/Term']);
+                if (key > bestKey) {
+                    bestKey = key;
+                    best = r['Year/Term'];
+                }
+            }
+            return best;
+        }
+
+        function previousPeriod(period) {
+            if (!period) return null;
+            const termMatch = period.match(/\b(Fall|Spring|Summer)\b\s*(\d{4})/i);
+            if (termMatch) {
+                const term = termMatch[1];
+                const year = parseInt(termMatch[2], 10);
+                return `${term} ${year - 1}`;
+            }
+            const ayMatch = period.match(/^(\d{4})\s*-\s*(\d{4})$/);
+            if (ayMatch) {
+                const start = parseInt(ayMatch[1], 10);
+                const end = parseInt(ayMatch[2], 10);
+                return `${start - 1}-${end - 1}`;
+            }
+            return null;
+        }
+
+        function aggregateValues(values, metric) {
+            if (!values.length) return null;
+            if (percentMetrics.has(metric)) {
+                // Without denominators, use simple mean across departments.
+                const sum = values.reduce((a, b) => a + b, 0);
+                return sum / values.length;
+            }
+            // Default: sum
+            return values.reduce((a, b) => a + b, 0);
+        }
+
+        function getAggregatedValue(metric, period) {
+            const subset = allData.filter(d => inScope(d) && d.Metric === metric && d['Year/Term'] === period);
+            const values = subset.map(d => parseValue(d.Value)).filter(v => v !== null && !Number.isNaN(v));
+            return aggregateValues(values, metric);
+        }
+
+        function formatValue(metric, value) {
+            if (value === null || value === undefined || value === '' || value === 'null') return '-';
+            
+            const strValue = String(value).trim();
+            if (strValue === '') return '-';
+            
+            if (strValue.includes('$')) {
+                return strValue;
+            }
+            
+            const v = parseFloat(strValue);
+            if (isNaN(v)) return strValue;
+            
+            if (metric.includes('Rate') || metric === 'Retention' || metric.includes('Retention_') || 
+                metric === 'DFWI' || metric.includes('Grad_') || metric === 'Online_CHP') {
+                return (v * 100).toFixed(1) + '%';
+            }
+            if (metric === 'Profit_Loss') {
+                // Display as profit/loss per dollar (e.g., $0.23 or ($0.33))
+                if (v < 0) {
+                    return '($' + Math.abs(v).toFixed(2) + ')';
+                } else {
+                    return '$' + v.toFixed(2);
+                }
+            }
+            if (metric === 'Avg_Class_Size') {
+                return v.toFixed(1);
+            }
+            if (metric === 'CHP' || metric === 'FTEs' || metric === 'Seats_Filled') {
+                return Math.round(v).toLocaleString();
+            }
+            return Math.round(v).toLocaleString();
+        }
+        
+        function parseValue(value) {
+            if (value === null || value === undefined || value === '' || value === 'null') return null;
+            const strValue = String(value).trim();
+            if (strValue === '') return null;
+            if (strValue.includes('$')) {
+                // Handle accounting format: ($0.33) means -0.33
+                let numStr = strValue.replace(/\$/g, '').replace(/\s/g, '');
+                if (numStr.startsWith('(') && numStr.endsWith(')')) {
+                    numStr = '-' + numStr.substring(1, numStr.length - 1);
+                }
+                return parseFloat(numStr);
+            }
+            const v = parseFloat(strValue);
+            return isNaN(v) ? null : v;
+        }
+        
+        function getLatestValue(dept, metric, yearPattern) {
+            const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
+                d.Metric === metric && 
+                d['Year/Term'] && 
+                d['Year/Term'].includes(yearPattern)
+            );
+            return matches.length > 0 ? matches[matches.length - 1] : null;
+        }
+        
+        function getMostRecentValue(dept, metric) {
+            // dept param kept for backwards compatibility; scope is driven by currentCollege/currentDept.
+            const scoped = allData.filter(d => inScope(d) && d.Metric === metric);
+            if (!scoped.length) return null;
+
+            const mostRecent = getMostRecentPeriod(scoped);
+            if (!mostRecent) return null;
+
+            const agg = getAggregatedValue(metric, mostRecent);
+            if (agg === null || Number.isNaN(agg)) return null;
+
+            return { yearTerm: mostRecent, value: agg };
+        }
+        
+        function getPreviousValue(dept, metric, currentYearTerm) {
+            if (!currentYearTerm) return null;
+
+            const prev = previousPeriod(currentYearTerm);
+            if (!prev) return null;
+
+            const agg = getAggregatedValue(metric, prev);
+            if (agg === null || Number.isNaN(agg)) return null;
+
+            return { yearTerm: prev, value: agg };
+        }
+            
+            // For term-based metrics (Fall/Spring), find the same term from previous year
+            if (currentTerm) {
+                const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
+                d.Metric === metric && 
+                    d['Year/Term'] && 
+                    d['Year/Term'].includes(currentTerm) &&
+                    d['Year/Term'] !== currentYearTerm &&
+                    d.Value !== null && 
+                    d.Value !== undefined && 
+                    d.Value !== ''
+                );
+                
+                if (matches.length === 0) return null;
+                
+                // Sort by year descending to get most recent same-term
+                matches.sort((a, b) => {
+                    const yearA = parseInt(a['Year/Term'].match(/\d{4}/)?.[0] || '0');
+                    const yearB = parseInt(b['Year/Term'].match(/\d{4}/)?.[0] || '0');
+                    return yearB - yearA;
+                });
+                
+                return matches[0];
+            }
+            
+            // Fallback for other formats
+            const matches = allData.filter(d =>
+                (currentCollege === 'All' || d.College === currentCollege) &&
+                (dept === 'All' || d.Department === dept) &&
+                d.Metric === metric && 
+                d['Year/Term'] && 
+                d['Year/Term'] !== currentYearTerm &&
+                d.Value !== null && 
+                d.Value !== undefined && 
+                d.Value !== ''
+            );
+            
+            if (matches.length === 0) return null;
+            matches.sort((a, b) => b['Year/Term'].localeCompare(a['Year/Term']));
+            return matches[0];
+        }
+        
+        // Load CSV file from same folder
+        Papa.parse('AllColleges_LongFormat_Output.csv', {
+            download: true,
+            header: true,
+            complete: function(results) {
+                allData = results.data.filter(row => 
+                    row.College && row.Department && row.Metric && row.Value
+                );
+                if (allData.length === 0) {
+                    showError('CSV file loaded but no valid data found. Please check the file format.');
+                } else {
+                    initializeDashboard();
+                }
+            },
+            error: function(error) {
+                showError('Could not load AllColleges_LongFormat_Output.csv. Make sure it is in the same folder as this HTML file.');
+                console.error(error);
+            }
+        });
+        
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `<div class="error-message"><strong>Error:</strong> ${message}</div>`;
+            document.getElementById('subtitle').textContent = 'Error loading data';
+        }
+        
+        function initializeDashboard() {
+            // Set the current date in the subtitle
+            const today = new Date();
+            const formattedDate = today.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            document.getElementById('subtitle').textContent = `Data refreshed on ${formattedDate}`;
+            
+            
+// Populate college dropdown (All + alphabetical)
+const colleges = ['All', ...[...new Set(allData.map(d => d.College).filter(Boolean))].sort()];
+const collegeSelect = document.getElementById('collegeSelect');
+collegeSelect.innerHTML = '';
+colleges.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = (c === 'All') ? 'All Colleges' : c;
+    collegeSelect.appendChild(opt);
+});
+
+// Default to CLAS college if present, else All
+const preferredCollege = 'College Letters Arts Sciences';
+currentCollege = colleges.includes(preferredCollege) ? preferredCollege : 'All';
+collegeSelect.value = currentCollege;
+
+const deptSelect = document.getElementById('deptSelect');
+
+function populateDeptOptions() {
+    const deptSet = new Set(allData
+        .filter(d => currentCollege === 'All' || d.College === currentCollege)
+        .map(d => d.Department)
+        .filter(Boolean)
+    );
+    const depts = ['All', ...[...deptSet].sort()];
+
+    deptSelect.innerHTML = '';
+    depts.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = (d === 'All') ? 'All Departments' : d;
+        deptSelect.appendChild(opt);
+    });
+
+    // Keep selection if still valid, else reset to All
+    if (!depts.includes(currentDept)) {
+        currentDept = 'All';
+    }
+    deptSelect.value = currentDept;
+}
+
+populateDeptOptions();
+
+collegeSelect.addEventListener('change', function() {
+    currentCollege = this.value;
+    // Reset department to All when college changes (safer UX)
+    currentDept = 'All';
+    populateDeptOptions();
+    updateChartMetricOptions();
+    updateDashboard();
+});
+
+deptSelect.addEventListener('change', function() {
+    currentDept = this.value;
+    updateChartMetricOptions(); // Update available metrics
+    updateDashboard();
+});
+
+// Populate chart metric selector
+            const chartMetricSelect = document.getElementById('chartMetricSelect');
+            
+            // Function to populate metrics based on current department
+            function updateChartMetricOptions() {
+                // Get metrics that have data for current department
+                const availableMetrics = [...new Set(allData
+                    .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
+                    .map(d => d.Metric)
+                )].sort();
+                
+                const currentSelection = chartMetricSelect.value;
+                chartMetricSelect.innerHTML = '<option value="">Choose a metric...</option>';
+                
+                availableMetrics.forEach(metric => {
+                    const opt = document.createElement('option');
+                    opt.value = metric;
+                    opt.textContent = metricLabels[metric] || metric;
+                    chartMetricSelect.appendChild(opt);
+                });
+                
+                // Restore selection if still available
+                if (availableMetrics.includes(currentSelection)) {
+                    chartMetricSelect.value = currentSelection;
+                    updateTrendChart(currentSelection);
+                } else {
+                    // Clear chart if previous metric not available
+                    if (trendChart) {
+                        trendChart.destroy();
+                        trendChart = null;
+                    }
+                }
+            }
+            
+            updateChartMetricOptions();
+            
+            chartMetricSelect.addEventListener('change', function() {
+                if (this.value) {
+                    updateTrendChart(this.value);
+                } else if (trendChart) {
+                    trendChart.destroy();
+                    trendChart = null;
+                }
+            });
+            
+            updateDashboard();
+        }
+        
+        function updateDashboard() {
+            updateMetricCards();
+            updateTables();
+            
+            // Update chart if a metric is selected
+            const selectedMetric = document.getElementById('chartMetricSelect').value;
+            if (selectedMetric) {
+                updateTrendChart(selectedMetric);
+            }
+        }
+        
+        function updateMetricCards() {
+            const container = document.getElementById('metricsContainer');
+            container.innerHTML = '';
+            
+            Object.keys(metricGroups).forEach(groupName => {
+                const section = document.createElement('div');
+                section.className = 'metric-section';
+                
+                const title = document.createElement('div');
+                title.className = 'section-title';
+                title.textContent = groupName;
+                section.appendChild(title);
+                
+                const kpiContainer = document.createElement('div');
+                kpiContainer.className = 'kpi-container';
+                
+                metricGroups[groupName].forEach(metric => {
+const current = getMostRecentValue(currentDept, metric);
+                    
+                    if (!current) return;
+                    
+                    const previous = getPreviousValue(currentDept, metric, current['Year/Term']);
+                    
+                    const cv = parseValue(current.Value);
+                    const pv = previous ? parseValue(previous.Value) : null;
+                    const change = (cv !== null && pv !== null) ? ((cv - pv) / pv * 100) : null;
+                    
+                    const card = document.createElement('div');
+                    card.className = 'kpi-card';
+                    
+                    let changeClass = 'neutral';
+                    let arrow = '';
+                    let comparisonText = '';
+                    
+                    if (change !== null && pv !== null) {
+                        // DFWI: lower is better (down = green, up = red)
+                        // All other metrics: higher is better (up = green, down = red)
+                        if (metric === 'DFWI') {
+                            changeClass = change < 0 ? 'positive' : change > 0 ? 'negative' : 'neutral';
+                        } else {
+                            changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+                        }
+                        
+                        // For percentage metrics, show "Up from" or "Down from" with previous value
+                        const isPercentageMetric = metric.includes('Rate') || metric === 'Retention' || 
+                                                   metric.includes('Retention_') || metric === 'DFWI' || 
+                                                   metric.includes('Grad_') || metric === 'Online_CHP';
+                        
+                        if (isPercentageMetric) {
+                            if (change > 0) {
+                                comparisonText = `Up from ${formatValue(metric, previous.Value)} in ${previous['Year/Term']}`;
+                            } else if (change < 0) {
+                                comparisonText = `Down from ${formatValue(metric, previous.Value)} in ${previous['Year/Term']}`;
+                            } else {
+                                comparisonText = `Unchanged from ${previous['Year/Term']}`;
+                            }
+                        } else {
+                            arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+                            comparisonText = `${arrow} ${Math.abs(change).toFixed(1)}% vs ${previous['Year/Term']}`;
+                        }
+                    } else {
+                        comparisonText = 'No prior year data';
+                    }
+                    
+                    // Create title with year/term in parentheses
+                    const metricTitle = `${metricLabels[metric] || metric} (${current['Year/Term']})`;
+                    
+                    card.innerHTML = `
+                        <div class="kpi-label">${metricTitle}</div>
+                        <div class="kpi-value">${formatValue(metric, current.Value)}</div>
+                        <div class="kpi-change ${changeClass}">${comparisonText}</div>
+                    `;
+                    kpiContainer.appendChild(card);
+                });
+                
+                if (kpiContainer.children.length > 0) {
+                    section.appendChild(kpiContainer);
+                    container.appendChild(section);
+                }
+            });
+        }
+        
+        function createAcademicYearCHPCard() {
+            // Get all academic years that have BOTH Fall and Spring CHP data
+            const academicYearsWithData = [];
+            
+            // Find all unique Fall years
+            const fallYears = [...new Set(allData
+                .filter(d => d.Metric === 'CHP' && d['Year/Term'] && d['Year/Term'].includes('Fall'))
+                .map(d => {
+                    const yearMatch = d['Year/Term'].match(/\d{4}/);
+                    return yearMatch ? parseInt(yearMatch[0]) : null;
+                })
+                .filter(y => y !== null)
+            )];
+            
+            // Check each Fall year to see if corresponding Spring year exists
+            fallYears.forEach(fallYear => {
+                const springYear = fallYear + 1;
+                const fallTerm = `Fall ${fallYear}`;
+                const springTerm = `Spring ${springYear}`;
+                
+                // Check if both Fall and Spring have data (excluding CLAS aggregate)
+                const hasFallData = allData.some(d => 
+                    inScope(d) &&
+                    d.Metric === 'CHP' && 
+                    d['Year/Term'] === fallTerm &&
+                    (currentDept !== 'All' || d.Department !== 'CLAS') &&
+                    d.Value !== null && 
+                    d.Value !== undefined && 
+                    d.Value !== ''
+                );
+                
+                const hasSpringData = allData.some(d => 
+                    inScope(d) &&
+                    d.Metric === 'CHP' && 
+                    d['Year/Term'] === springTerm &&
+                    (currentDept !== 'All' || d.Department !== 'CLAS') &&
+                    d.Value !== null && 
+                    d.Value !== undefined && 
+                    d.Value !== ''
+                );
+                
+                // Only include academic years with BOTH Fall and Spring data
+                if (hasFallData && hasSpringData) {
+                    academicYearsWithData.push(`${fallYear}-${springYear}`);
+                }
+            });
+            
+            if (academicYearsWithData.length === 0) return null;
+            
+            // Sort in reverse chronological order
+            academicYearsWithData.sort().reverse();
+            
+            const mostRecentAcademicYear = academicYearsWithData[0];
+            const previousAcademicYear = academicYearsWithData.length > 1 ? academicYearsWithData[1] : null;
+            
+            // Calculate sum for most recent academic year
+            const [fallYear, springYear] = mostRecentAcademicYear.split('-').map(y => parseInt(y));
+            const currentSum = calculateAcademicYearCHP(fallYear, springYear);
+            
+            let previousSum = null;
+            if (previousAcademicYear) {
+                const [prevFallYear, prevSpringYear] = previousAcademicYear.split('-').map(y => parseInt(y));
+                previousSum = calculateAcademicYearCHP(prevFallYear, prevSpringYear);
+            }
+            
+            const change = (currentSum !== null && previousSum !== null) 
+                ? ((currentSum - previousSum) / previousSum * 100) 
+                : null;
+            
+            const card = document.createElement('div');
+            card.className = 'kpi-card';
+            
+            let changeClass = 'neutral';
+            let arrow = '';
+            let comparisonText = '';
+            
+            if (change !== null) {
+                changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+                arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+                comparisonText = `${arrow} ${Math.abs(change).toFixed(1)}% vs ${previousAcademicYear}`;
+            } else {
+                comparisonText = 'No prior year data';
+            }
+            
+            card.innerHTML = `
+                <div class="kpi-label">Credit Hours Produced (${mostRecentAcademicYear})</div>
+                <div class="kpi-value">${currentSum !== null ? Math.round(currentSum).toLocaleString() : '-'}</div>
+                <div class="kpi-change ${changeClass}">${comparisonText}</div>
+            `;
+            
+            return card;
+        }
+        
+        function calculateAcademicYearCHP(fallYear, springYear) {
+            // Get all departments' CHP for Fall and Spring
+            const fallTerm = `Fall ${fallYear}`;
+            const springTerm = `Spring ${springYear}`;
+            
+            const fallData = allData.filter(d => 
+                inScope(d) &&
+                d.Metric === 'CHP' && 
+                d['Year/Term'] === fallTerm &&
+                (currentDept !== 'All' || d.Department !== 'CLAS') && // Exclude aggregate only when summing the aggregate CLAS row to avoid double-counting
+                d.Value !== null && 
+                d.Value !== undefined && 
+                d.Value !== ''
+            );
+            
+            const springData = allData.filter(d => 
+                inScope(d) &&
+                d.Metric === 'CHP' && 
+                d['Year/Term'] === springTerm &&
+                (currentDept !== 'All' || d.Department !== 'CLAS') && // Exclude aggregate only when summing the aggregate CLAS row to avoid double-counting
+                d.Value !== null && 
+                d.Value !== undefined && 
+                d.Value !== ''
+            );
+            
+            const fallSum = fallData.reduce((sum, d) => sum + parseFloat(d.Value), 0);
+            const springSum = springData.reduce((sum, d) => sum + parseFloat(d.Value), 0);
+            
+            return fallSum + springSum;
+        }
+        
+        function updateTables() {
+            updateYearTable();
+            updateTermTable();
+        }
+        
+        function updateYearTable() {
+            // Get all academic years (YYYY-YYYY format) and sort in reverse
+            const years = [...new Set(allData
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
+                .map(d => d['Year/Term'])
+                .filter(y => y && y.includes('-'))
+            )].sort().reverse();
+            
+            const headerRow = document.getElementById('tableHeaderYear');
+            headerRow.innerHTML = '<th>Metric</th>';
+            years.forEach(year => {
+                const th = document.createElement('th');
+                th.textContent = year;
+                headerRow.appendChild(th);
+            });
+            
+            const metrics = [...new Set(allData
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
+                .map(d => d.Metric)
+            )].sort();
+            
+            const tbody = document.getElementById('tableBodyYear');
+            tbody.innerHTML = '';
+            
+            metrics.forEach(metric => {
+                // Check if this metric has any year-based data
+                const hasYearData = years.some(year => getAggregatedValue(metric, year) !== null);
+                
+                // Only show this row if there's at least one year with data
+                if (!hasYearData) return;
+                
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                nameCell.className = 'metric-name';
+                nameCell.textContent = metricLabels[metric] || metric;
+                row.appendChild(nameCell);
+                
+                years.forEach(year => {
+                    const val = getAggregatedValue(metric, year);
+                    const cell = document.createElement('td');
+                    cell.textContent = (val !== null) ? formatValue(metric, val) : '-';
+                    row.appendChild(cell);
+                });
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        function updateTermTable() {
+            // Get all terms (Fall/Spring) in reverse chronological order
+            const terms = [...new Set(allData
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
+                .map(d => d['Year/Term'])
+                .filter(y => y && (y.includes('Fall') || y.includes('Spring')))
+            )].sort((a, b) => {
+                // Helper function to get sort key
+                const getSortKey = (period) => {
+                    const yearMatch = period.match(/\d{4}/);
+                    if (!yearMatch) return 0;
+                    
+                    const year = parseInt(yearMatch[0]);
+                    const isFall = period.toLowerCase().includes('fall');
+                    const isSpring = period.toLowerCase().includes('spring');
+                    
+                    // For academic calendar: Fall 2021, Spring 2022, Fall 2022, Spring 2023...
+                    // Fall semester: use year as-is, add 0
+                    // Spring semester: subtract 1 from year, add 5
+                    if (isFall) return year * 10 + 0;
+                    if (isSpring) return (year - 1) * 10 + 5;
+                    return year * 10;
+                };
+                
+                return getSortKey(b) - getSortKey(a);
+            });
+            
+            const headerRow = document.getElementById('tableHeaderTerm');
+            headerRow.innerHTML = '<th>Metric</th>';
+            terms.forEach(term => {
+                const th = document.createElement('th');
+                th.textContent = term;
+                headerRow.appendChild(th);
+            });
+            
+            const metrics = [...new Set(allData
+                .filter(d => (currentCollege === 'All' || d.College === currentCollege) && (currentDept === 'All' || d.Department === currentDept))
+                .map(d => d.Metric)
+            )].sort();
+            
+            const tbody = document.getElementById('tableBodyTerm');
+            tbody.innerHTML = '';
+            
+            metrics.forEach(metric => {
+                // Check if this metric has any term-based data
+                const hasTermData = terms.some(term => getAggregatedValue(metric, term) !== null);
+                
+                // Only show this row if there's at least one term with data
+                if (!hasTermData) return;
+                
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                nameCell.className = 'metric-name';
+                nameCell.textContent = metricLabels[metric] || metric;
+                row.appendChild(nameCell);
+                
+                terms.forEach(term => {
+                    const val = getAggregatedValue(metric, term);
+                    const cell = document.createElement('td');
+                    cell.textContent = (val !== null) ? formatValue(metric, val) : '-';
+                    row.appendChild(cell);
+                });
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        function calculateLinearRegression(dataPoints) {
+            // Calculate linear regression: y = mx + b
+            const n = dataPoints.length;
+            if (n < 2) return null;
+            
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            
+            dataPoints.forEach((point, index) => {
+                const x = index; // Use index as x value
+                const y = point.value;
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumX2 += x * x;
+            });
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            // Calculate trend line values for each point
+            return dataPoints.map((point, index) => slope * index + intercept);
+        }
+        
+        function updateTrendChart(metric) {
+            // Get all data points for this department and metric
+            const chartData = allData
+                .filter(d => d.Department === currentDept && d.Metric === metric)
+                .map(d => ({
+                    period: d['Year/Term'],
+                    value: parseValue(d.Value)
+                }))
+                .filter(d => d.value !== null)
+                .sort((a, b) => {
+                    const periodA = a.period;
+                    const periodB = b.period;
+                    
+                    // Helper function to get sort key
+                    const getSortKey = (period) => {
+                        const yearMatch = period.match(/\d{4}/);
+                        if (!yearMatch) return 0;
+                        
+                        const year = parseInt(yearMatch[0]);
+                        const isFall = period.toLowerCase().includes('fall');
+                        const isSpring = period.toLowerCase().includes('spring');
+                        
+                        // For academic calendar: Fall 2021, Spring 2022, Fall 2022, Spring 2023...
+                        // Fall semester: use year as-is, add 0
+                        // Spring semester: subtract 1 from year, add 5
+                        if (isFall) return year * 10 + 0;
+                        if (isSpring) return (year - 1) * 10 + 5;
+                        return year * 10; // For academic years
+                    };
+                    
+                    return getSortKey(periodA) - getSortKey(periodB);
+                });
+            
+            if (chartData.length === 0) {
+                if (trendChart) {
+                    trendChart.destroy();
+                    trendChart = null;
+                }
+                return;
+            }
+            
+            const ctx = document.getElementById('trendChart');
+            
+            if (trendChart) {
+                trendChart.destroy();
+            }
+            
+            // Calculate trend line
+            const trendLineValues = calculateLinearRegression(chartData);
+            
+            // Prepare datasets
+            const datasets = [{
+                label: metricLabels[metric] || metric,
+                data: chartData.map(d => d.value),
+                borderColor: '#00447c',
+                backgroundColor: 'rgba(0, 68, 124, 0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                order: 2
+            }];
+            
+            // Add trend line if we have enough data points
+            if (trendLineValues && chartData.length >= 2) {
+                datasets.push({
+                    label: 'Trend Line',
+                    data: trendLineValues,
+                    borderColor: '#d11242',
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    order: 1
+                });
+            }
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.map(d => d.period),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: `${metricLabels[metric] || metric} - ${currentDept === 'CLAS' ? 'All Departments' : currentDept}`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    // Don't format trend line values with metric-specific formatting
+                                    if (context.dataset.label === 'Trend Line') {
+                                        label += formatValue(metric, context.parsed.y);
+                                    } else {
+                                        label += formatValue(metric, context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatValue(metric, value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
